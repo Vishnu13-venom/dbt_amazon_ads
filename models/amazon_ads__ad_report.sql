@@ -34,6 +34,17 @@ ads as (
     where is_most_recent_record = True
 ),
 
+sb_campaigns as (
+    select *
+    from {{ var('sb_campaign_history') }}
+    where is_most_recent_record = True
+),
+
+sb_ad_report as (
+    select *
+    from {{ var('sb_ad_report') }}
+),
+
 fields as (
     select
         report.source_relation,
@@ -42,8 +53,10 @@ fields as (
         account_info.account_id,
         account_info.country_code,
         account_info.profile_id,
-        portfolios.portfolio_name,
-        portfolios.portfolio_id,
+
+        coalesce(portfolios.portfolio_name, sb_campaigns.portfolio_name) as portfolio_name,
+        coalesce(portfolios.portfolio_id, sb_campaigns.portfolio_id) as portfolio_id,
+
         campaigns.campaign_name,
         report.campaign_id,
         ad_groups.ad_group_name,
@@ -60,12 +73,33 @@ fields as (
         sum(report.clicks) as clicks,
         sum(report.impressions) as impressions,
         sum(report.purchases_30_d) as purchases_30_d,
-        sum(report.sales_30_d) as sales_30_d
+        sum(report.sales_30_d) as sales_30_d,
 
-        {{ amazon_ads_persist_pass_through_columns(pass_through_variable='amazon_ads__advertised_product_passthrough_metrics', identifier='report', transform='sum', coalesce_with=0, exclude_fields=['purchases_30_d','sales_30_d']) }}
+        -- Sponsored Brands metrics
+        sb_ad_report.attributedUnitsOrderedNewToBrandPercentage14d,
+        sb_ad_report.dpv14d,
+        sb_ad_report.unitsSold14d,
+        sb_ad_report.vctr,
+        sb_ad_report.video5SecondViewRate,
+        sb_ad_report.video5SecondViews,
+        sb_ad_report.videoCompleteViews,
+        sb_ad_report.videoFirstQuartileViews,
+        sb_ad_report.videoMidpointViews,
+        sb_ad_report.videoThirdQuartileViews,
+        sb_ad_report.videoUnmutes,
+        sb_ad_report.viewableImpressions,
+        sb_ad_report.vtr
+
+        {{ amazon_ads_persist_pass_through_columns(
+            pass_through_variable='amazon_ads__advertised_product_passthrough_metrics',
+            identifier='report',
+            transform='sum',
+            coalesce_with=0,
+            exclude_fields=['purchases_30_d','sales_30_d']
+        ) }}
 
     from report
-    
+
     left join ads
         on ads.ad_id = report.ad_id
         and ads.source_relation = report.source_relation
@@ -82,7 +116,18 @@ fields as (
         on account_info.profile_id = campaigns.profile_id
         and account_info.source_relation = campaigns.source_relation 
 
-    {{ dbt_utils.group_by(20) }}
+    -- Sponsored Brands campaign join
+    left join sb_campaigns
+        on sb_campaigns.campaign_id = report.campaign_id
+        and sb_campaigns.source_relation = report.source_relation
+
+    -- Sponsored Brands ad report join
+    left join sb_ad_report
+        on sb_ad_report.campaign_id = report.campaign_id
+        and sb_ad_report.date_day = report.date_day
+        and sb_ad_report.source_relation = report.source_relation
+
+    {{ dbt_utils.group_by(20 + 14) }}
 )
 
 select *
