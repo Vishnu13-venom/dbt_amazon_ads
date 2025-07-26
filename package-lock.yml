@@ -1,0 +1,11 @@
+packages:
+  - name: amazon_ads_source
+    package: fivetran/amazon_ads_source
+    version: 0.5.0
+  - name: fivetran_utils
+    package: fivetran/fivetran_utils
+    version: 0.4.10
+  - name: dbt_utils
+    package: dbt-labs/dbt_utils
+    version: 1.3.0
+sha1_hash: 213faaa471f1e748af9bbe443780193d6e0758bc

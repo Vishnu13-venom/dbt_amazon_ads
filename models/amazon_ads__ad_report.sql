@@ -1,10 +1,37 @@
 {{ config(enabled=var('ad_reporting__amazon_ads_enabled', True)) }}
 
 with sponsored_product_report as (
-    select
-        *
+     select
+        'sponsored_products' as ad_type,
+        date as date_day,
+        null as portfolio_id,
+        null as portfolio_name,
+        null as campaign_name,
+        campaign_id,
+        ad_group_id,
+        ad_id,
+        null as ad_group_name,
+        advertised_asin,
+        advertised_sku,
+        campaign_budget_amount,
+        campaign_budget_currency_code,
+        campaign_budget_type,
+        cost,
+        clicks,
+        impressions,
+        purchases_30_d,
+        sales_30_d
+
+        {{ amazon_ads_persist_pass_through_columns(
+            pass_through_variable='amazon_ads__advertised_product_passthrough_metrics',
+            identifier='this',
+            transform='identity',
+            coalesce_with=0,
+            exclude_fields=['purchases_30_d','sales_30_d']
+        ) }}
     from {{ var('advertised_product_report') }}
 ),
+
 
 sb_ad_report as (
     select
@@ -24,30 +51,29 @@ sb_ad_report as (
 sb_campaigns as (
     select *
     from {{ var('sb_campaign_history') }}
-    where is_most_recent_record = true
 ),
 
 sponsored_brand_report as (
-    select
+     select
         'sponsored_brands' as ad_type,
-        cast(sc.profile_id as string) as profile_id,
+        date_day,
         sc.portfolio_id,
-        sc.name as campaign_name,
+        sc.name as portfolio_name,  -- ✅ Add this line
+        null as campaign_name,
         sb.campaign_id,
         sb.ad_group_id,
         sb.ad_id,
-        sb.date_day,
-        sb.clicks,
-        sb.cost,
-        sb.impressions,
-        sb.purchases_30_d,
-        sb.sales_30_d,
+        null as ad_group_name,
         null as advertised_asin,
         null as advertised_sku,
         null as campaign_budget_amount,
         null as campaign_budget_currency_code,
         null as campaign_budget_type,
-        null as source_relation  -- set if available
+        sb.cost,
+        sb.clicks,
+        sb.impressions,
+        sb.purchases_30_d,
+        sb.sales_30_d
     from sb_ad_report sb
     left join sb_campaigns sc
         on sb.campaign_id = sc.id
@@ -67,45 +93,42 @@ account_info as (
 
 portfolios as (
     select *
-    from {{ ref('int_amazon_ads__portfolio_history') }}
+    from {{ source('amazon_ads', 'portfolio_history') }} 
 ),
 
 campaigns as (
     select *
     from {{ var('campaign_history') }}
-    where is_most_recent_record = true
 ),
 
 ad_groups as (
     select *
     from {{ var('ad_group_history') }}
-    where is_most_recent_record = true
 ),
 
 ads as (
     select *
     from {{ var('product_ad_history') }}
-    where is_most_recent_record = true
 ),
 
-fields as (
+final as (
     select
         report.ad_type,
         report.source_relation,
         report.date_day,
-        account_info.account_name,
-        account_info.account_id,
-        account_info.country_code,
+        ai.account_name,
+        ai.account_id,
+        ai.country_code,
         report.profile_id,
-        coalesce(report.portfolio_name, portfolios.portfolio_name) as portfolio_name,
-        coalesce(report.portfolio_id, portfolios.portfolio_id) as portfolio_id,
+        coalesce(report.portfolio_name, pf.portfolio_name) as portfolio_name,
+        coalesce(report.portfolio_id, pf.portfolio_id) as portfolio_id,
         report.campaign_name,
         report.campaign_id,
-        ad_groups.ad_group_name,
+        coalesce(report.ad_group_name, ag.ad_group_name) as ad_group_name,
         report.ad_group_id,
         report.ad_id,
-        ads.serving_status,
-        ads.state,
+        coalesce(report.serving_status, pa.serving_status) as serving_status,
+        coalesce(report.state, pa.state) as state,
         report.advertised_asin,
         report.advertised_sku,
         report.campaign_budget_amount,
@@ -122,31 +145,31 @@ fields as (
             identifier='report',
             transform='sum',
             coalesce_with=0,
-            exclude_fields=['purchases_30_d','sales_30_d']) }}
+            exclude_fields=['purchases_30_d','sales_30_d']
+        ) }}
 
     from report
 
-    left join ads
-        on ads.ad_id = report.ad_id
-        and ads.source_relation = report.source_relation
+    left join ads pa
+        on pa.ad_id = report.ad_id
+       
 
-    left join ad_groups
-        on ad_groups.ad_group_id = report.ad_group_id
-        and ad_groups.source_relation = report.source_relation
+    left join ad_groups ag
+        on ag.ad_group_id = report.ad_group_id
+        
 
-    left join campaigns
-        on campaigns.campaign_id = report.campaign_id
-        and campaigns.source_relation = report.source_relation
+    left join campaigns ca
+        on ca.campaign_id = report.campaign_id
+        
 
-    left join portfolios
-        on portfolios.portfolio_id = coalesce(report.portfolio_id, campaigns.portfolio_id)
-        and portfolios.source_relation = report.source_relation
+    left join portfolios pf
+        on pf.portfolio_id = coalesce(report.portfolio_id, ca.portfolio_id)
+        
 
-    left join account_info
-        on account_info.profile_id = report.profile_id
-        and account_info.source_relation = report.source_relation
+    left join account_info ai
+        on ai.profile_id = report.profile_id
 
     {{ dbt_utils.group_by(20) }}
 )
 
-select * from fields
+select * from final

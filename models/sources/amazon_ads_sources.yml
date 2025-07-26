@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: amazon_ads
+    database: darkroom-clients
+    schema: amazon_ads
+    tables:
+      - name: sb_campaign_history
+      - name: sb_ad_report
+      - name: ad_group_history
+      - name: ad_group_level_report
+      - name: advertised_product_report
+      - name: campaign_history
+      - name: campaign_level_report
+      - name: portfolio_history
+      - name: product_ad_history
+      - name: profile
+      - name: keyword_history
+      - name: targeting_keyword_report
+      - name: search_term_ad_keyword_report
