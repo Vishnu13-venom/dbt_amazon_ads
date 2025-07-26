@@ -6,6 +6,9 @@ models:
   amazon_ads:
     +schema: amazon_ads
     +materialized: table
+    staging:
+      amazon_ads:
+        +materialized: table
     intermediate:
       +materialized: view
 vars:
