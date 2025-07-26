@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: amazon_ads
+    database: AMAZON_ADS_DBT_amazon_ads
+    schema: test_dbt
+    tables:
+      - name: sb_ad_report
+      - name: sb_campaign_history
